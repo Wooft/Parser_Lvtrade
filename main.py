@@ -3,6 +3,7 @@ import pprint
 import re, requests, bs4, csv, os
 import time
 from csv import DictWriter
+from tqdm import tqdm
 
 if 'price_of_parts.csv' in os.listdir():
     os.remove('price_of_parts.csv')
@@ -68,12 +69,12 @@ class Lvparser():
             text = self.getinfo(link)
             soup = bs4.BeautifulSoup(text, features='html.parser')
             pages = self.getPages(soup)
-            for page in pages:  # Цикл прохода по всем ссылкам на страницы в категории (пагинация)
-                print(f'Ведется анализ страницы {link + page}')
+            pagetitle = soup.find_all(id='pagetitle')[0].text
+            print(f'Ведется анализ раздела -  "{pagetitle}"')
+            for page in tqdm(pages):  # Цикл прохода по всем ссылкам на страницы в категории (пагинация)
                 time.sleep(1)
                 text = requests.get(link + page).text
                 soup = bs4.BeautifulSoup(text, features='html.parser')
-                pagetitle = soup.find_all(id='pagetitle')[0].text
                 parts = soup.find_all(class_='item_info')
                 for part in parts:
                     if len(part.contents[3].contents[1].contents) != 5:
@@ -90,7 +91,7 @@ class Lvparser():
             print('Анализ раздела закончен, переходим к следующему')
 
     def writeData(self, new_row):  # функция, которая записывает данные в CSV файл
-        with open(f"price_of_parts.csv", 'a', newline='') as csvfile:
+        with open(f"price_of_parts.csv", 'a', newline='', encoding='UTF-8') as csvfile:
             headers_csv = ['article', 'name', 'price', 'category']
             writer_newrow = DictWriter(csvfile, fieldnames=headers_csv)
             writer_newrow.writerow(new_row)
