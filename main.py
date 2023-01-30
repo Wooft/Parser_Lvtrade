@@ -1,8 +1,8 @@
-import datetime
-import pprint
 import re, requests, bs4, csv, os
 import time
 from csv import DictWriter
+from pathlib import Path
+
 from tqdm import tqdm
 
 if 'price_of_parts.csv' in os.listdir():
@@ -50,9 +50,6 @@ class Lvparser():
         return links
 
     def getNumbers(self, datasoup):  # Эта функция позволяет получить полное количество всех запчастей на сайте
-        # url_parts = 'https://lvtrade.ru/catalog/'
-        # data = self.getinfo(url_parts)
-        # soup = bs4.BeautifulSoup(data, features='html.parser')
         countes = datasoup.find_all(class_="element-count2 muted font_upper")
         pattern = re.compile("[0-9]+")
         num = 0
@@ -88,6 +85,8 @@ class Lvparser():
                             'category': pagetitle,
                         }
                         self.writeData(new_row)
+                        item_link = part.contents[1].contents[3].contents[1].attrs['href']
+                        self.getPictures(item_link, new_row['article'])
             print('Анализ раздела закончен, переходим к следующему')
 
     def writeData(self, new_row):  # функция, которая записывает данные в CSV файл
@@ -98,7 +97,7 @@ class Lvparser():
             csvfile.close()
 
     def getPages(self, soup):  # функция, которая позволяет получить количество и список страниц в категории
-        numbers = soup.find_all(class_='nums')
+        numbers = soup.find_all(class_='зnums')
         pages_list = []
         if len(numbers) == 0:
             pages_list = ['?PAGEN_1=1']
@@ -107,6 +106,21 @@ class Lvparser():
             for i in range(1, page_cuanty + 1):
                 pages_list.append(f'?PAGEN_1={i}')
         return pages_list
+
+    def getPictures(self, item_link, article):
+        text = self.getinfo(self.url+item_link)
+        data = bs4.BeautifulSoup(text, features='html.parser')
+        img_link_f = data.find_all(id='photo-0')
+        res_link = self.url + img_link_f[0].contents[1].contents[1].attrs['data-src']
+        if 'Pictures' not in os.listdir():
+            os.mkdir('Pictures')
+        folder = os.path.join(Path.cwd(), 'Pictures')
+        r = requests.get(res_link)
+        with open(os.path.join(folder, f'{article}.jpg'), 'wb') as f:
+            if os.path.join(folder, f'{article}.jpg') not in os.listdir(folder):
+                f.write(r.content)
+            else:
+                pass
 
 
 if __name__ == "__main__":
