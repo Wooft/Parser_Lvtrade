@@ -33,6 +33,7 @@ class Lvparser():
     def getinfo(self, url):
         response = requests.get(url, headers=self.HEADERS)
         if response.status_code != 200:
+            print('Ошибка получения данных, повторяю попытку (status_code != 200)')
             time.sleep(2)
             self.getinfo(url)
         else:
@@ -68,8 +69,7 @@ class Lvparser():
             soup = bs4.BeautifulSoup(text, features='html.parser')
             pages = self.getPages(soup)
             pagetitle = soup.find_all(id='pagetitle')[0].text
-            print(f'Ведется анализ раздела -  "{pagetitle}"')
-            for page in tqdm(pages):  # Цикл прохода по всем ссылкам на страницы в категории (пагинация)
+            for page in tqdm(pages, desc='Страницы', postfix=f'{pagetitle}, {link}'):  # Цикл прохода по всем ссылкам на страницы в категории (пагинация)
                 time.sleep(0.33)
                 # print(f'Получаю информацию по странице: {link + page}')
                 text = requests.get(link + page).text
