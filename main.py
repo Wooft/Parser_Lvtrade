@@ -71,7 +71,7 @@ class Lvparser():
             print(f'Ведется анализ раздела -  "{pagetitle}"')
             for page in tqdm(pages):  # Цикл прохода по всем ссылкам на страницы в категории (пагинация)
                 time.sleep(0.33)
-                print(f'Получаю информацию по странице: {link + page}')
+                # print(f'Получаю информацию по странице: {link + page}')
                 text = requests.get(link + page).text
                 soup = bs4.BeautifulSoup(text, features='html.parser')
                 parts = soup.find_all(class_='item_info')
@@ -89,14 +89,10 @@ class Lvparser():
                         self.writeData(new_row)
                         item_link = part.contents[1].contents[3].contents[1].attrs['href']
                         if os.path.join(f'{new_row["article"]}.jpg') not in os.listdir(self.path):
-                            print(os.path.join(self.path, f'{new_row["article"]}.jpg'))
-                            print(os.listdir(self.path))
-                            print('Сохраняю картинку')
                             self.getPictures(item_link, new_row['article'])
                         else:
-                            print('Картинка уже скачан')
                             pass
-            print('Анализ раздела закончен, переходим к следующему')
+            # print('Анализ раздела закончен, переходим к следующему')
 
     def writeData(self, new_row):  # функция, которая записывает данные в CSV файл
         with open(f"price_of_parts.csv", 'a', newline='', encoding='UTF-8') as csvfile:
