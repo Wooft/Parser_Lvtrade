@@ -29,6 +29,7 @@ class Lvparser():
         self.url = 'https://lvtrade.ru'
         self.url_catalogs = '/catalog/zapchasti/'
         self.path = os.path.join(Path.cwd(), 'Pictures')
+        self.folder = os.path.join(Path.cwd(), 'Pictures')
 
     def getinfo(self, url):
         response = requests.get(url, headers=self.HEADERS)
@@ -126,11 +127,11 @@ class Lvparser():
             os.mkdir('Pictures')
         folder = os.path.join(Path.cwd(), 'Pictures')
         r = requests.get(res_link)
-        with open(os.path.join(folder, f'{article}.jpg'), 'wb') as f:
-            if os.path.join(folder, f'{article}.jpg') not in os.listdir(folder):
+        if res_link == 'https://lvtrade.ru':
+            pass
+        else:
+            with open(os.path.join(folder, f'{article}.jpg'), 'wb') as f:
                 f.write(r.content)
-            else:
-                pass
 
 
 if __name__ == "__main__":
