@@ -69,29 +69,34 @@ class Lvparser():
             soup = bs4.BeautifulSoup(text, features='html.parser')
             pages = self.getPages(soup)
             pagetitle = soup.find_all(id='pagetitle')[0].text
-            for page in tqdm(pages, desc='Страницы', postfix=f'{pagetitle}, {link}'):  # Цикл прохода по всем ссылкам на страницы в категории (пагинация)
-                time.sleep(0.33)
-                # print(f'Получаю информацию по странице: {link + page}')
-                text = requests.get(link + page).text
-                soup = bs4.BeautifulSoup(text, features='html.parser')
-                parts = soup.find_all(class_='item_info')
-                for part in parts:
-                    if len(part.contents[3].contents[1].contents) != 5:
-                        pass
-                    else:
-                        price = float(part.contents[3].contents[1].contents[1].contents[1].attrs['data-value'])
-                        new_row = {
-                            'article': part.contents[1].contents[5].contents[3].attrs['data-value'],
-                            'name': part.contents[1].contents[3].text.strip()[9:],
-                            'price': price,
-                            'category': pagetitle,
-                        }
-                        self.writeData(new_row)
-                        item_link = part.contents[1].contents[3].contents[1].attrs['href']
-                        if os.path.join(f'{new_row["article"]}.jpg') not in os.listdir(self.path):
-                            self.getPictures(item_link, new_row['article'])
-                        else:
+            with tqdm(pages) as pbar:
+                pbar.set_description(pagetitle)
+                for page in pbar:
+                    pbar.set_postfix(link=link+page, refresh=True)
+                    pbar.update(0)
+                    time.sleep(0.33)
+                    # print(f'Получаю информацию по странице: {link + page}')
+                    text = requests.get(link + page).text
+                    soup = bs4.BeautifulSoup(text, features='html.parser')
+                    parts = soup.find_all(class_='item_info')
+                    for part in parts:
+                        if len(part.contents[3].contents[1].contents) != 5:
                             pass
+                        else:
+                            price = float(part.contents[3].contents[1].contents[1].contents[1].attrs['data-value'])
+                            new_row = {
+                                'article': part.contents[1].contents[5].contents[3].attrs['data-value'],
+                                'name': part.contents[1].contents[3].text.strip()[9:],
+                                'price': price,
+                                'category': pagetitle,
+                            }
+                            self.writeData(new_row)
+                            item_link = part.contents[1].contents[3].contents[1].attrs['href']
+                            if os.path.join(f'{new_row["article"]}.jpg') not in os.listdir(self.path):
+                                self.getPictures(item_link, new_row['article'])
+                            else:
+                                pass
+
             # print('Анализ раздела закончен, переходим к следующему')
 
     def writeData(self, new_row):  # функция, которая записывает данные в CSV файл
