@@ -26,10 +26,12 @@ class Lvparser():
             'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36',
             'content-type': 'text/html; charset=UTF-8'
         }
+        if 'Pictures' not in os.listdir():
+            os.mkdir('Pictures')
         self.url = 'https://lvtrade.ru'
         self.url_catalogs = '/catalog/zapchasti/'
-        self.path = os.path.join(Path.cwd(), 'Pictures')
-        self.folder = os.path.join(Path.cwd(), 'Pictures')
+        self.path = os.path.join(Path.cwd())
+
 
     def getinfo(self, url):
         response = requests.get(url, headers=self.HEADERS)
@@ -76,29 +78,29 @@ class Lvparser():
                     pbar.set_postfix(link=link+page, refresh=True)
                     pbar.update(0)
                     time.sleep(0.33)
-                    # print(f'Получаю информацию по странице: {link + page}')
                     text = requests.get(link + page).text
                     soup = bs4.BeautifulSoup(text, features='html.parser')
-                    parts = soup.find_all(class_='item_info')
+                    parts = soup.find_all(class_='inner_wrap TYPE_1')
                     for part in parts:
-                        if len(part.contents[3].contents[1].contents) != 5:
+                        if len(part.contents[3].contents[3].contents[1].contents) != 5:
                             pass
                         else:
-                            price = float(part.contents[3].contents[1].contents[1].contents[1].attrs['data-value'])
+                            price = float(part.contents[3].contents[3].contents[1].contents[1].contents[1].attrs['data-value'])
+                            if len(part.find_all(class_='article_block')) != 0:
+                                article = part.contents[3].contents[1].contents[5].contents[3].attrs['data-value']
+                            else:
+                                article = None
                             new_row = {
-                                'article': part.contents[1].contents[5].contents[3].attrs['data-value'],
-                                'name': part.contents[1].contents[3].text.strip()[9:],
+                                'article': article,
+                                'name': part.contents[3].contents[1].contents[3].text.strip()[9:],
                                 'price': price,
                                 'category': pagetitle,
                             }
                             self.writeData(new_row)
-                            item_link = part.contents[1].contents[3].contents[1].attrs['href']
-                            if os.path.join(f'{new_row["article"]}.jpg') not in os.listdir(self.path):
-                                self.getPictures(item_link, new_row['article'])
-                            else:
-                                pass
+                            if len(part.find_all(class_='section-gallery-wrapper__item _active')) != 0:
+                                item_link = part.contents[1].contents[3].attrs['href']
+                                self.download_picture(item_link=item_link, article=new_row['article'])
 
-            # print('Анализ раздела закончен, переходим к следующему')
 
     def writeData(self, new_row):  # функция, которая записывает данные в CSV файл
         with open(f"price_of_parts.csv", 'a', newline='', encoding='UTF-8') as csvfile:
@@ -118,21 +120,21 @@ class Lvparser():
                 pages_list.append(f'?PAGEN_1={i}')
         return pages_list
 
-    def getPictures(self, item_link, article):
-        text = self.getinfo(self.url+item_link)
-        data = bs4.BeautifulSoup(text, features='html.parser')
-        img_link_f = data.find_all(id='photo-0')
-        res_link = self.url + img_link_f[0].contents[1].contents[1].attrs['data-src']
-        if 'Pictures' not in os.listdir():
-            os.mkdir('Pictures')
+    def download_picture(self, item_link, article):
         folder = os.path.join(Path.cwd(), 'Pictures')
-        r = requests.get(res_link)
-        if res_link == 'https://lvtrade.ru':
-            pass
-        else:
+        if f'{article}.jpg' not in os.listdir(folder):
+            text = self.getinfo(self.url + item_link)
+            data = bs4.BeautifulSoup(text, features='html.parser')
+            img_link_f = data.find_all(id='photo-0')
+            res_link = self.url + img_link_f[0].contents[1].contents[1].attrs['data-src']
+            r = requests.get(res_link)
             with open(os.path.join(folder, f'{article}.jpg'), 'wb') as f:
-                f.write(r.content)
-
+                if os.path.join(folder, f'{article}.jpg') not in os.listdir(folder):
+                    f.write(r.content)
+                else:
+                    pass
+        else:
+            pass
 
 if __name__ == "__main__":
     Lvparser = Lvparser()
