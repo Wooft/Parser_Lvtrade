@@ -78,7 +78,7 @@ class Lvparser():
                     pbar.set_postfix(link=link+page, refresh=True)
                     pbar.update(0)
                     time.sleep(0.33)
-                    text = requests.get(link + page).text
+                    text = requests.get('https://lvtrade.ru/catalog/zapchasti/teny/?PAGEN_1=37').text
                     soup = bs4.BeautifulSoup(text, features='html.parser')
                     parts = soup.find_all(class_='inner_wrap TYPE_1')
                     for part in parts:
@@ -97,7 +97,8 @@ class Lvparser():
                                 'category': pagetitle,
                             }
                             self.writeData(new_row)
-                            if len(part.find_all(class_='section-gallery-wrapper__item _active')) != 0:
+                            if len(part.find_all(class_='image_wrapper_block js-notice-block__image ')) != 0:
+                                print()
                                 item_link = part.contents[1].contents[3].attrs['href']
                                 self.download_picture(item_link=item_link, article=new_row['article'])
 
