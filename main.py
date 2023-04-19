@@ -80,30 +80,29 @@ class Lvparser():
                     time.sleep(0.33)
                     text = requests.get(link+page).text
                     soup = bs4.BeautifulSoup(text, features='html.parser')
-                    parts = soup.find_all(class_='inner_wrap TYPE_1')
+                    parts = soup.find_all(class_='inner_info')
                     for part in parts:
-                        if len(part.contents[3].contents[3].contents[1].contents) != 5:
+                        if len(part.contents[3].contents[1].text) <= 2:
                             pass
                         else:
-                            price = float(part.contents[3].contents[3].contents[1].contents[1].contents[1].attrs['data-value'])
-                            if len(part.find_all(class_='article_block')) != 0:
-                                article = part.contents[3].contents[1].contents[5].contents[3].attrs['data-value']
-                            else:
-                                article = None
+                            price = float(part.contents[3].contents[1].contents[1].contents[1].attrs.get('data-value'))
+                            # Получение артикула товара
+                            article = part.contents[1].contents[3].contents[1].text.strip()[0:7]
+                            # Заполнение словаря данными для записи в CSV файл
                             new_row = {
                                 'article': article,
-                                'name': part.contents[3].contents[1].contents[3].text.strip()[9:],
+                                'name': part.contents[1].contents[3].contents[1].text.strip()[9:],
                                 'price': price,
                                 'category': pagetitle,
                             }
                             self.writeData(new_row)
+                            # А тут нужно создать таску, которая будет качать картинки
                             if len(part.find_all(class_='section-gallery-wrapper__item _active')) != 0:
                                 if part.contents[1].contents[3].attrs.get('href') == None:
                                     pass
                                 else:
                                     item_link = part.contents[1].contents[3].attrs['href']
                                     self.download_picture(item_link=item_link, article=new_row['article'])
-
 
     def writeData(self, new_row):  # функция, которая записывает данные в CSV файл
         with open(f"price_of_parts.csv", 'a', newline='', encoding='UTF-8') as csvfile:
