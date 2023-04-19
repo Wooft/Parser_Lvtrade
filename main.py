@@ -112,12 +112,12 @@ class Lvparser():
             csvfile.close()
 
     def getPages(self, soup):  # функция, которая позволяет получить количество и список страниц в категории
-        numbers = soup.find_all(class_='nums')
+        numbers = soup.find_all(class_='navigation-pages')
         pages_list = []
         if len(numbers) == 0:
             pages_list = ['?PAGEN_1=1']
         else:
-            page_cuanty = int(numbers[0].contents[len(numbers[0].contents) - 2].text)
+            page_cuanty = int(numbers[0].text.strip()[-1])
             for i in range(1, page_cuanty + 1):
                 pages_list.append(f'?PAGEN_1={i}')
         return pages_list
