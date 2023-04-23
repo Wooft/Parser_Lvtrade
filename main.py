@@ -84,7 +84,7 @@ class Lvparser():
                 coros = [self.getparts(page=page, pagetitle=pagetitle, link=link, session=session) for page in p_chunk]
                 await asyncio.gather(*coros)
                 await session.close()
-            print(f'Раздел обработан за {datetime.datetime.now() - start}')
+            print(f'Раздел "{pagetitle}" обработан за {datetime.datetime.now() - start}')
 
 
     def writeData(self, new_row):  # функция, которая записывает данные в CSV файл
