@@ -3,6 +3,7 @@ import time
 from csv import DictWriter
 from pathlib import Path
 
+from database import Session, Parts
 from tqdm import tqdm
 
 if 'price_of_parts.csv' in os.listdir():
@@ -11,6 +12,9 @@ url = 'https://lvtrade.ru'
 
 
 class Lvparser():
+    '''Класс парсера
+    в init помещены headers и создание папки для хранения картинок, при инициализации экземплера класса
+    также размещены пути к папке и основной URL сайта'''
     def __init__(self):
         self.HEADERS = {
             'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
@@ -32,7 +36,7 @@ class Lvparser():
         self.url_catalogs = '/catalog/zapchasti/'
         self.path = os.path.join(Path.cwd())
 
-
+    # Функция получает request по-указанному URL, если сервер уходит в тротлинг, то через паузу вызывает себя снова
     def getinfo(self, url):
         response = requests.get(url, headers=self.HEADERS)
         if response.status_code != 200:
@@ -42,67 +46,44 @@ class Lvparser():
         else:
             data = response.text
         return data
-    def getCategories(self) -> list:  # Эта функция позволяет получить список всех категорий запчастей на сайте
-        text = self.getinfo(self.url + self.url_catalogs)
-        datasoup = bs4.BeautifulSoup(text, features="html.parser")
-        categories = datasoup.find_all(class_='section-compact-list__image flexbox flexbox--row')
-        links = []
-        for category in categories:
-            for item in category.find_all('a'):
-                data = (item.contents[0].get('title'), item.get('href'))
-                links.append(data)
-        self.getNumbers(datasoup)
-        return links
-
-    def getNumbers(self, datasoup):  # Эта функция позволяет получить полное количество всех запчастей на сайте
-        countes = datasoup.find_all(class_="element-count2 muted font_upper")
-        pattern = re.compile("[0-9]+")
-        num = 0
-        for count in countes:
-            result = pattern.findall(count.text)
-            num += int(result[0])
-        print(f'Количество запчастей на сайте: {num}')
-        return count
 
     def getPrices(self):  # Основная функция, вызывающая все остальные
-        list_links = self.getCategories()
-        for item in list_links:
-            link = url + item[1]
-            text = self.getinfo(link)
-            soup = bs4.BeautifulSoup(text, features='html.parser')
-            pages = self.getPages(soup)
-            pagetitle = soup.find_all(id='pagetitle')[0].text
-            with tqdm(pages) as pbar:
-                pbar.set_description(pagetitle)
-                for page in pbar:
-                    pbar.set_postfix(link=link+page, refresh=True)
-                    pbar.update(0)
-                    time.sleep(0.33)
-                    text = requests.get(link+page).text
-                    soup = bs4.BeautifulSoup(text, features='html.parser')
-                    parts = soup.find_all(class_='inner_info')
-                    for part in parts:
-                        if len(part.contents[3].contents[1].text) <= 2:
-                            pass
+        count = 0
+        mother_link = 'https://lvtrade.ru/catalog/zapchasti/'
+        text = self.getinfo(mother_link)
+        soup = bs4.BeautifulSoup(text, features='html.parser')
+        quantity_pages = soup.find_all(class_='nums')[0].text.split(sep="\n")[-2]
+        with tqdm(range(0, int(quantity_pages)+1)) as pbar:
+        # for num in range(0, int(quantity_pages)+1):
+            for num in pbar:
+                pbar.set_description(desc=str(num), refresh=True)
+                link = f'https://lvtrade.ru/catalog/zapchasti/?PAGEN_1={num}'
+                souper = bs4.BeautifulSoup(self.getinfo(link), features='html.parser')
+                parts = souper.find_all(class_='item_info')
+                for part in parts:
+                    name = part.contents[1].contents[3].text.strip()[9:]
+                    code = part.contents[1].contents[3].text.strip()[0:7]
+                    href = self.url+part.contents[1].contents[3].contents[1].attrs['href']
+                    self.download_picture(item_link=href, article=code)
+                    try:
+                        price = float(part.contents[3].contents[1].contents[1].contents[1].attrs['data-value'])
+                    except:
+                        price = 0.00
+                    with Session as session:
+                        item = session.query(Parts).filter_by(code=code).all()
+                        if len(item) != 0:
+                            part = item[0]
+                            part.price = price
+                            session.add(part)
+                            session.commit()
                         else:
-                            price = float(part.contents[3].contents[1].contents[1].contents[1].attrs.get('data-value'))
-                            # Получение артикула товара
-                            article = part.contents[1].contents[3].contents[1].text.strip()[0:7]
-                            # Заполнение словаря данными для записи в CSV файл
-                            new_row = {
-                                'article': article,
-                                'name': part.contents[1].contents[3].contents[1].text.strip()[9:],
-                                'price': price,
-                                'category': pagetitle,
-                            }
-                            self.writeData(new_row)
-                            # А тут нужно создать таску, которая будет качать картинки
-                            if len(part.find_all(class_='section-gallery-wrapper__item _active')) != 0:
-                                if part.contents[1].contents[3].attrs.get('href') == None:
-                                    pass
-                                else:
-                                    item_link = part.contents[1].contents[3].attrs['href']
-                                    self.download_picture(item_link=item_link, article=new_row['article'])
+                            part = Parts(
+                                name=name,
+                                code=code,
+                                price=price
+                            )
+                            session.add(part)
+                            session.commit()
 
     def writeData(self, new_row):  # функция, которая записывает данные в CSV файл
         with open(f"price_of_parts.csv", 'a', newline='', encoding='UTF-8') as csvfile:
@@ -111,30 +92,23 @@ class Lvparser():
             writer_newrow.writerow(new_row)
             csvfile.close()
 
-    def getPages(self, soup):  # функция, которая позволяет получить количество и список страниц в категории
-        numbers = soup.find_all(class_='navigation-pages')
-        pages_list = []
-        if len(numbers) == 0:
-            pages_list = ['?PAGEN_1=1']
-        else:
-            page_cuanty = int(numbers[0].text.strip()[-1])
-            for i in range(1, page_cuanty + 1):
-                pages_list.append(f'?PAGEN_1={i}')
-        return pages_list
-
     def download_picture(self, item_link, article):
         folder = os.path.join(Path.cwd(), 'Pictures')
+        ''' Проверка того, что в папке нет фото запчасти '''
         if f'{article}.jpg' not in os.listdir(folder):
-            text = self.getinfo(self.url + item_link)
+            text = self.getinfo(item_link)
             data = bs4.BeautifulSoup(text, features='html.parser')
-            img_link_f = data.find_all(id='photo-0')
-            res_link = self.url + img_link_f[0].contents[1].contents[1].attrs['data-src']
-            r = requests.get(res_link)
-            with open(os.path.join(folder, f'{article}.jpg'), 'wb') as f:
-                if os.path.join(folder, f'{article}.jpg') not in os.listdir(folder):
-                    f.write(r.content)
-                else:
-                    pass
+            img_link_f = data.find_all(class_='product-detail-gallery__container')
+            res_link = img_link_f[0].contents[1].attrs['href']
+            if res_link == '/local/templates/aspro_max/images/svg/noimage_product.svg':
+                pass
+            else:
+                r = requests.get(f'{self.url}{res_link}')
+                with open(os.path.join(folder, f'{article}.jpg'), 'wb') as f:
+                    if os.path.join(folder, f'{article}.jpg') not in os.listdir(folder):
+                        f.write(r.content)
+                    else:
+                        pass
         else:
             pass
 

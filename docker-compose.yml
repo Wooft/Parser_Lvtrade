@@ -1,0 +1,12 @@
+version: '0.01'
+
+
+services:
+  db:
+    image: postgres:15.4-alpine3.18
+    ports:
+      - '5444:5432'
+    environment:
+      - POSTRES_USER=$DB_USER
+      - POSTGRES_PASSWORD=$DB_PASSWORD
+      - POSTGRES_DB=$DB_NAME
