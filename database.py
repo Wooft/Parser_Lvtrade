@@ -8,7 +8,7 @@ PG_DSN = f'postgresql://{config("DB_USER")}:{config("DB_PASSWORD")}@127.0.0.1:54
 engine = create_engine(PG_DSN)
 
 Base = declarative_base()
-Session = create_session(bind=engine)
+Session = create_session(bind=engine, autocommit=False)
 
 atexit.register(engine.dispose)
 class Parts(Base):

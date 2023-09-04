@@ -1,10 +1,14 @@
+import pathlib
+import pprint
 import re, requests, bs4, csv, os
 import time
 from csv import DictWriter
 from pathlib import Path
-
+from celery.app.control import Inspect
 from database import Session, Parts
 from tqdm import tqdm
+
+from tasks import download_pdf, app
 
 if 'price_of_parts.csv' in os.listdir():
     os.remove('price_of_parts.csv')
@@ -32,9 +36,12 @@ class Lvparser():
         }
         if 'Pictures' not in os.listdir():
             os.mkdir('Pictures')
+        if 'details' not in os.listdir():
+            os.mkdir('details')
         self.url = 'https://lvtrade.ru'
         self.url_catalogs = '/catalog/zapchasti/'
         self.path = os.path.join(Path.cwd())
+        self.path_to_details = self.path + '/details'
 
     # Функция получает request по-указанному URL, если сервер уходит в тротлинг, то через паузу вызывает себя снова
     def getinfo(self, url):
@@ -70,11 +77,9 @@ class Lvparser():
                     except:
                         price = 0.00
                     with Session as session:
-                        item = session.query(Parts).filter_by(code=code).all()
-                        if len(item) != 0:
-                            part = item[0]
-                            part.price = price
-                            session.add(part)
+                        item = session.query(Parts).filter_by(code=code).first()
+                        if item != None:
+                            item.price = price
                             session.commit()
                         else:
                             part = Parts(
@@ -112,6 +117,42 @@ class Lvparser():
         else:
             pass
 
+    def get_detailing(self):
+        ''' Метод класса, который позволяет сохранять деталировки в pdf формате
+         содержит два списка: список ссылок и список каталогов, каждый из которых соответствует производителю оборудования'''
+        list_links = []
+        folders_list = []
+        tasks_list = []
+        link = f'{self.url}/detailing/'
+        text = self.getinfo(url=link)
+        soup = bs4.BeautifulSoup(text, features='html.parser')
+        elements = soup.find_all(class_='detailing-content__tr')
+        for element in elements:
+            href = f'{self.url}{element.contents[7].contents[3].attrs["href"]}'
+            name = element.contents[5].contents[3].text
+            folder_name = str(element.contents[1].contents[3].text)
+            list_links.append({
+                name: (href, folder_name)
+            })
+            if folder_name not in folders_list:
+                folders_list.append(folder_name)
+        for folder in folders_list:
+            if folder not in os.listdir(self.path_to_details):
+                os.mkdir(os.path.join(self.path_to_details, folder))
+        for item in list_links:
+            for name, object in item.items():
+                res = download_pdf.delay(name=name, link=object[0], folder_name=object[1], path=self.path_to_details)
+                tasks_list.append(res)
+        with tqdm(tasks_list) as pbar:
+            pbar.set_description(desc=f'Идет скачивание {len(tasks_list)} деталировок...')
+            for task in pbar:
+                while task.status == 'PENDING':
+                    pass
+                else:
+                    pbar.update(1)
+        return print('Все задачи успешно выполнены')
+
 if __name__ == "__main__":
     Lvparser = Lvparser()
     Lvparser.getPrices()
+    # Lvparser.get_detailing()
