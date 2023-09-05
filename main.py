@@ -123,26 +123,36 @@ class Lvparser():
         list_links = []
         folders_list = []
         tasks_list = []
+        list_of_files = []
+        for root, dirs, files in os.walk(self.path_to_details):
+            list_of_files.extend(files)
         link = f'{self.url}/detailing/'
         text = self.getinfo(url=link)
         soup = bs4.BeautifulSoup(text, features='html.parser')
         elements = soup.find_all(class_='detailing-content__tr')
         for element in elements:
             href = f'{self.url}{element.contents[7].contents[3].attrs["href"]}'
-            name = element.contents[5].contents[3].text
-            folder_name = str(element.contents[1].contents[3].text)
-            list_links.append({
-                name: (href, folder_name)
-            })
-            if folder_name not in folders_list:
-                folders_list.append(folder_name)
+            name = f'{element.contents[5].contents[3].text.replace("/", "_")}.pdf'
+            ''' Проверка того, что файл уже не скачан и не находится в каталоге загрузок '''
+            if name in list_of_files:
+                pass
+            else:
+                folder_name = str(element.contents[1].contents[3].text)
+                list_links.append({
+                    name: (href, folder_name)
+                })
+                if folder_name not in folders_list:
+                    folders_list.append(folder_name)
         for folder in folders_list:
             if folder not in os.listdir(self.path_to_details):
                 os.mkdir(os.path.join(self.path_to_details, folder))
-        for item in list_links:
-            for name, object in item.items():
-                res = download_pdf.delay(name=name, link=object[0], folder_name=object[1], path=self.path_to_details)
-                tasks_list.append(res)
+        if len(list_links) == 0:
+            return print('Все файлы уже скачаны')
+        else:
+            for item in list_links:
+                for name, object in item.items():
+                    res = download_pdf.delay(name=name, link=object[0], folder_name=object[1], path=self.path_to_details)
+                    tasks_list.append(res)
         with tqdm(tasks_list) as pbar:
             pbar.set_description(desc=f'Идет скачивание {len(tasks_list)} деталировок...')
             for task in pbar:
@@ -154,5 +164,5 @@ class Lvparser():
 
 if __name__ == "__main__":
     Lvparser = Lvparser()
-    Lvparser.getPrices()
-    # Lvparser.get_detailing()
+    # Lvparser.getPrices()
+    Lvparser.get_detailing()

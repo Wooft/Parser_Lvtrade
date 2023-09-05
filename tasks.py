@@ -12,6 +12,6 @@ def download_pdf(name, link, folder_name, path):
     if f'{name}.pdf' not in os.listdir(path_to_save):
         ''' После проверки на то, что такая деталировка еще не скачана, файл сохраняется в нужный каталог '''
         response = requests.get(url=link)
-        with open(os.path.join(path_to_save, f'{name.replace("/", "_")}.pdf'), 'wb') as file:
+        with open(os.path.join(path_to_save, name), 'wb') as file:
             file.write(response.content)
     return 'Done'
