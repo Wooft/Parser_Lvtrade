@@ -1,19 +1,21 @@
+import asyncio
 import pathlib
-import pprint
 import re, requests, bs4, csv, os
 import time
 from csv import DictWriter
 from pathlib import Path
-from celery.app.control import Inspect
+
+import aiohttp
+from more_itertools import chunked
 from database import Session, Parts
 from tqdm import tqdm
-
-from tasks import download_pdf, app
+from tasks import download_pdf, app, download_picture
 
 if 'price_of_parts.csv' in os.listdir():
     os.remove('price_of_parts.csv')
 url = 'https://lvtrade.ru'
 
+CHUNK_SIZE = 5
 
 class Lvparser():
     '''Класс парсера
@@ -47,48 +49,57 @@ class Lvparser():
     def getinfo(self, url):
         response = requests.get(url, headers=self.HEADERS)
         if response.status_code != 200:
+            print(response.text)
             print('Ошибка получения данных, повторяю попытку (status_code != 200)')
-            time.sleep(2)
+            time.sleep(10)
             self.getinfo(url)
         else:
             data = response.text
         return data
 
-    def getPrices(self):  # Основная функция, вызывающая все остальные
+    async def getPrices(self):  # Основная функция, вызывающая все остальные
         count = 0
         mother_link = 'https://lvtrade.ru/catalog/zapchasti/'
         text = self.getinfo(mother_link)
         soup = bs4.BeautifulSoup(text, features='html.parser')
-        quantity_pages = soup.find_all(class_='nums')[0].text.split(sep="\n")[-2]
-        with tqdm(range(0, int(quantity_pages)+1)) as pbar:
-        # for num in range(0, int(quantity_pages)+1):
-            for num in pbar:
-                pbar.set_description(desc=str(num), refresh=True)
-                link = f'https://lvtrade.ru/catalog/zapchasti/?PAGEN_1={num}'
-                souper = bs4.BeautifulSoup(self.getinfo(link), features='html.parser')
-                parts = souper.find_all(class_='item_info')
-                for part in parts:
-                    name = part.contents[1].contents[3].text.strip()[9:]
-                    code = part.contents[1].contents[3].text.strip()[0:7]
-                    href = self.url+part.contents[1].contents[3].contents[1].attrs['href']
-                    self.download_picture(item_link=href, article=code)
-                    try:
-                        price = float(part.contents[3].contents[1].contents[1].contents[1].attrs['data-value'])
-                    except:
-                        price = 0.00
-                    with Session as session:
-                        item = session.query(Parts).filter_by(code=code).first()
-                        if item != None:
-                            item.price = price
-                            session.commit()
-                        else:
-                            part = Parts(
-                                name=name,
-                                code=code,
-                                price=price
-                            )
-                            session.add(part)
-                            session.commit()
+        quantity_pages = int(soup.find_all(class_='nums')[0].text.split(sep="\n")[-2])
+        with tqdm(list(chunked(range(quantity_pages), CHUNK_SIZE))) as pbar:
+            for page_chunk in pbar:
+                session = aiohttp.ClientSession()
+                coros = [self.get_parts(session=session,
+                                        link=f'https://lvtrade.ru/catalog/zapchasti/?PAGEN_1={page}',
+                                        ) for page in page_chunk]
+                await asyncio.gather(*coros)
+                await session.close()
+
+    async def get_parts(self, session, link):
+        ''' Асинхронная функция для получения и внесенения данных в бд с нескольких страниц с запчастями '''
+        async with session.get(link) as response:
+            await response.text()
+            souper = bs4.BeautifulSoup(self.getinfo(link), features='html.parser')
+            parts = souper.find_all(class_='item_info')
+            for part in parts:
+                name = part.contents[1].contents[3].text.strip()[9:]
+                code = part.contents[1].contents[3].text.strip()[0:7]
+                href = self.url + part.contents[1].contents[3].contents[1].attrs['href']
+                download_picture.delay(item_link=href, article=code)
+                try:
+                    price = float(part.contents[3].contents[1].contents[1].contents[1].attrs['data-value'])
+                except:
+                    price = 0.00
+                with Session as session:
+                    item = session.query(Parts).filter_by(code=code).first()
+                    if item != None:
+                        item.price = price
+                        session.commit()
+                    else:
+                        part = Parts(
+                            name=name,
+                            code=code,
+                            price=price
+                        )
+                        session.add(part)
+                        session.commit()
 
     def writeData(self, new_row):  # функция, которая записывает данные в CSV файл
         with open(f"price_of_parts.csv", 'a', newline='', encoding='UTF-8') as csvfile:
@@ -98,7 +109,7 @@ class Lvparser():
             csvfile.close()
 
     def download_picture(self, item_link, article):
-        folder = os.path.join(Path.cwd(), 'Pictures')
+        folder = os.path.join(pathlib.Path.cwd(), 'Pictures')
         ''' Проверка того, что в папке нет фото запчасти '''
         if f'{article}.jpg' not in os.listdir(folder):
             text = self.getinfo(item_link)
@@ -164,5 +175,5 @@ class Lvparser():
 
 if __name__ == "__main__":
     Lvparser = Lvparser()
-    # Lvparser.getPrices()
-    Lvparser.get_detailing()
+    asyncio.run(Lvparser.getPrices())
+    # Lvparser.get_detailing()
