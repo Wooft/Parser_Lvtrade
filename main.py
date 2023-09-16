@@ -102,6 +102,7 @@ class Lvparser():
                         session.commit()
 
     def writeData(self, new_row):  # функция, которая записывает данные в CSV файл
+        #For testing connections
         with open(f"price_of_parts.csv", 'a', newline='', encoding='UTF-8') as csvfile:
             headers_csv = ['article', 'name', 'price', 'category']
             writer_newrow = DictWriter(csvfile, fieldnames=headers_csv)
