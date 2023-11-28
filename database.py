@@ -4,7 +4,7 @@ from sqlalchemy.orm import create_session
 from sqlalchemy.ext.declarative import declarative_base
 from decouple import config
 
-PG_DSN = f'postgresql://{config("DB_USER")}:{config("DB_PASSWORD")}@127.0.0.1:5432/{config("DB_NAME")}'
+PG_DSN = f'postgresql://{config("DB_USER")}:{config("DB_PASSWORD")}@127.0.0.1:5444/{config("DB_NAME")}'
 engine = create_engine(PG_DSN)
 
 Base = declarative_base()
@@ -21,5 +21,12 @@ class Parts(Base):
 
     def __str__(self):
         return self.code
+
+class Downloads(Base):
+    __tablename__ = 'downloads'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String)
+    status = Column(String)
 
 Base.metadata.create_all(bind=engine)

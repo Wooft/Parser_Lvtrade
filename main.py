@@ -4,7 +4,7 @@ import re, requests, bs4, csv, os
 import time
 from csv import DictWriter
 from pathlib import Path
-
+from watermark import add_watermark
 import aiohttp
 from more_itertools import chunked
 from database import Session, Parts
@@ -175,6 +175,16 @@ class Lvparser():
         return print('Все задачи успешно выполнены')
 
 if __name__ == "__main__":
-    Lvparser = Lvparser()
-    asyncio.run(Lvparser.getPrices())
-    # Lvparser.get_detailing()
+    choice = None
+    while choice != 4:
+        print('1 - Начать парсинг деталировок \n'
+              '2 - Нанести водяные знаки \n'
+              '3 - что то третье \n')
+        choice = input()
+        if choice == '1':
+            parser = Lvparser()
+            parser.get_detailing()
+        if choice == '2':
+            add_watermark(input='Details/Without Watermarks', output = 'Details/Ready for upload')
+        if choice == '3':
+            print('Что то и произошло')

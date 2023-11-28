@@ -4,51 +4,37 @@ from typing import Union, Literal, List
 import os
 from os import PathLike
 from PyPDF2 import PdfWriter, PdfReader
+from tqdm import tqdm
+import shutil
+from tasks import stamp
 
 
-def add_watermark():
-    out = 'output'
-    if out not in os.listdir(pathlib.Path.cwd()):
-        os.mkdir('output')
-    folders = os.path.join(pathlib.Path.cwd(), 'details')
+def add_watermark(input: str, output: str):
+    folders = os.path.join(pathlib.Path.cwd(), input)
+    list_of_files = []
+    for root, list, files in os.walk(input):
+        list_of_files.extend(files)
+    list_tasks = []
     for folder in os.listdir(folders):
-        if folder not in os.listdir(out):
-            os.mkdir(f'{out}/{folder}')
+        if folder not in os.listdir(output):
+            os.mkdir(f'{output}/{folder}')
         for file in os.listdir(os.path.join(folders, folder)):
-            out_name = f'{os.path.basename(file)}_with_watermark.pdf)'
-            print(file)
-            if out_name not in os.listdir(os.path.join(out, folder)):
-                stamp(content_pdf=os.path.join(folders, f'{folder}/{file}'), stamp_pdf='w-5.pdf', pdf_result=os.path.join(out, f'{folder}/{out_name}'))
-            else:
+            ext = file.split('.')[-1]
+            if ext != 'pdf':
                 pass
+            else:
+                out_name = f'{os.path.basename(file)}'
+                if out_name not in os.listdir(os.path.join(output, folder)):
+                    task = stamp.delay(content_pdf=os.path.join(folders, f'{folder}/{file}'), stamp_pdf='w-5.pdf', pdf_result=os.path.join(output, f'{folder}/{out_name}'))
+                    list_tasks.append(task)
+                    print('добавлено')
+                else:
+                    pass
+    with tqdm(list_tasks) as pbar:
+        pbar.set_description(desc=f'Идет обработка {len(list_tasks)} деталировок...')
+        for task in pbar:
+            while task.status == 'PENDING':
+                pass
+            else:
+                pbar.update(1)
     return print('Все задачи успешно выполнены')
-
-
-
-
-def stamp(
-    content_pdf: Path,
-    stamp_pdf: Path,
-    pdf_result: Path,
-    page_indices: Union[Literal["ALL"], List[int]] = "ALL",
-):
-    reader = PdfReader(stamp_pdf)
-    image_page = reader.pages[0]
-
-    writer = PdfWriter()
-
-    reader = PdfReader(content_pdf)
-    if page_indices == "ALL":
-        page_indices = list(range(0, len(reader.pages)))
-    for index in page_indices:
-        content_page = reader.pages[index]
-        mediabox = content_page.mediabox
-        content_page.merge_page(image_page)
-        content_page.mediabox = mediabox
-        writer.add_page(content_page)
-
-    with open(pdf_result, "wb") as fp:
-        writer.write(fp)
-
-if __name__ == '__main__':
-    add_watermark()

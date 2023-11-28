@@ -1,9 +1,14 @@
+import shutil
+
 from celery import Celery
 import requests
 import os
 import bs4
 import pathlib
 import time
+from pathlib import Path
+from PyPDF2 import  PdfReader, PdfWriter
+from typing import Union, Literal, List
 
 app = Celery(broker='redis://127.0.0.1/1', backend='redis://127.0.0.1/2')
 
@@ -66,3 +71,37 @@ def download_picture(item_link, article):
                     return None
     else:
         return None
+
+
+@app.task()
+def stamp(
+        content_pdf: Path,
+        stamp_pdf: Path,
+        pdf_result: Path,
+        page_indices: Union[Literal["ALL"], List[int]] = "ALL",
+):
+    reader = PdfReader(stamp_pdf)
+    image_page = reader.pages[0]
+
+    writer = PdfWriter()
+    try:
+        reader = PdfReader(content_pdf)
+    except:
+        shutil.copy(content_pdf, 'Не обработано')
+    if page_indices == "ALL":
+        page_indices = list(range(0, len(reader.pages)))
+    for index in page_indices:
+        content_page = reader.pages[index]
+        mediabox = content_page.mediabox
+        content_page.merge_page(image_page)
+        content_page.mediabox = mediabox
+        try:
+            writer.add_page(content_page)
+        except:
+            pass
+
+    with open(pdf_result, "wb") as fp:
+        try:
+            writer.write(fp)
+        except:
+            print('Не скопировано')
